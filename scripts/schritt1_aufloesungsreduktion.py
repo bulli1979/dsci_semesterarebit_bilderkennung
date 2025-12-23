@@ -13,27 +13,39 @@ def resize_image(im, max_resolution):
     
     Args:
         im: PIL Image
-        max_resolution: Tuple (max_height, max_width) - maximale Zielgröße
+        max_resolution: 
+            - Wenn int: Längere Seite wird auf diesen Wert gesetzt
+            - Wenn Tuple (max_height, max_width): Maximale Zielgröße (alte Methode)
         
     Returns:
         PIL Image (resized)
     """
-    # Maximale Zielgröße (Höhe, Breite)
-    max_height, max_width = max_resolution
-    
     # Aktuelle Bildgröße ermitteln
     original_width, original_height = im.size
     print(f"Ursprüngliche Bildgröße: {original_width} x {original_height}")
     
-    # Berechne Skalierungsfaktor, um Proportionen beizubehalten
-    # Wir skalieren so, dass das Bild in die max_width x max_height Box passt
-    scale_width = max_width / original_width
-    scale_height = max_height / original_height
-    scale = min(scale_width, scale_height)  # Nimm den kleineren Faktor
-    
-    # Berechne neue Größe mit beibehaltenen Proportionen
-    new_width = int(original_width * scale)
-    new_height = int(original_height * scale)
+    # Neue Methode: Wenn max_resolution ein int ist, setze die längere Seite auf diesen Wert
+    if isinstance(max_resolution, int):
+        max_long_side = max_resolution
+        # Finde die längere Seite
+        longer_side = max(original_width, original_height)
+        # Berechne Skalierungsfaktor
+        scale = max_long_side / longer_side
+        # Berechne neue Größe mit beibehaltenen Proportionen
+        new_width = int(original_width * scale)
+        new_height = int(original_height * scale)
+        print(f"Längere Seite wird auf {max_long_side}px gesetzt")
+    else:
+        # Alte Methode: Tuple (max_height, max_width) - für Rückwärtskompatibilität
+        max_height, max_width = max_resolution
+        # Berechne Skalierungsfaktor, um Proportionen beizubehalten
+        # Wir skalieren so, dass das Bild in die max_width x max_height Box passt
+        scale_width = max_width / original_width
+        scale_height = max_height / original_height
+        scale = min(scale_width, scale_height)  # Nimm den kleineren Faktor
+        # Berechne neue Größe mit beibehaltenen Proportionen
+        new_width = int(original_width * scale)
+        new_height = int(original_height * scale)
     
     print(f"Neue Bildgröße (proportional): {new_width} x {new_height}")
     print(f"Skalierungsfaktor: {scale:.3f}")

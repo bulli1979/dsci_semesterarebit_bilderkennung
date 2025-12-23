@@ -16,7 +16,7 @@ if scripts_path not in sys.path:
 from object_extraction import generate_mask_with_hsv_threshold, create_masked_image
 
 
-def create_mask_from_image(im_filled, hue_threshold=None, saturation_threshold=None, 
+def create_mask_from_image(image, hue_threshold=None, saturation_threshold=None, 
                            value_threshold=None):
     """
     Erstellt eine Maske aus einem Bild basierend auf HSV-Schwellwerten.
@@ -32,46 +32,46 @@ def create_mask_from_image(im_filled, hue_threshold=None, saturation_threshold=N
         masked_image: NumPy Array mit maskiertem Bild
     """
     # Stelle sicher, dass im_filled ein NumPy-Array ist
-    if not isinstance(im_filled, np.ndarray):
-        im_filled = np.array(im_filled)
+    if not isinstance(image, np.ndarray):
+        image = np.array(image)
     
     # Stelle sicher, dass das Array die richtige Form hat (H, W, 3) für RGB
-    if im_filled.ndim == 2:
+    if image.ndim == 2:
         # Graustufenbild → RGB konvertieren
-        im_filled = np.stack([im_filled, im_filled, im_filled], axis=-1)
-    elif im_filled.ndim == 3 and im_filled.shape[2] == 4:
+        image = np.stack([image, image, image], axis=-1)
+    elif image.ndim == 3 and image.shape[2] == 4:
         # RGBA → RGB konvertieren
-        im_filled = im_filled[:, :, :3]
-    elif im_filled.ndim == 3 and im_filled.shape[2] != 3:
-        raise ValueError(f"Unerwartete Array-Form: {im_filled.shape}. Erwartet (H, W, 3) für RGB.")
+        image = image[:, :, :3]
+    elif image.ndim == 3 and image.shape[2] != 3:
+        raise ValueError(f"Unerwartete Array-Form: {image.shape}. Erwartet (H, W, 3) für RGB.")
     
     # Stelle sicher, dass der Wertebereich 0-255 ist
-    if im_filled.dtype != np.uint8:
-        if im_filled.max() <= 1.0:
-            im_filled = (im_filled * 255).astype(np.uint8)
+    if image.dtype != np.uint8:
+        if image.max() <= 1.0:
+            image = (image * 255).astype(np.uint8)
         else:
-            im_filled = im_filled.astype(np.uint8)
+            image = image.astype(np.uint8)
     
     # Stelle sicher, dass das Array kopierbar ist (für rgb_to_hsv)
     # Konvertiere zu einem kontinuierlichen Array, falls nötig
-    if not im_filled.flags['C_CONTIGUOUS']:
-        im_filled = np.ascontiguousarray(im_filled)
+    if not image.flags['C_CONTIGUOUS']:
+        image = np.ascontiguousarray(image)
     
     # Explizite Kopie erstellen, um sicherzustellen, dass es kopierbar ist
-    im_filled = im_filled.copy()
+    image = image.copy()
     
-    print(f"im_filled Shape: {im_filled.shape}, dtype: {im_filled.dtype}")
+    print(f"im_filled Shape: {image.shape}, dtype: {image.dtype}")
     
     # Erstelle Maske
     mask = generate_mask_with_hsv_threshold(
-        im_filled, 
+        image, 
         hue_threshold=hue_threshold,
         saturation_threshold=saturation_threshold,
         value_threshold=value_threshold
     )
     
     # Erstelle maskiertes Bild
-    masked_image = create_masked_image(im_filled, mask)
+    masked_image = create_masked_image(image, mask)
     
     return mask, masked_image
 

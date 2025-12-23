@@ -6,6 +6,7 @@ Identifiziert separate Objekte in der Maske und extrahiert sie.
 import numpy as np
 from skimage.measure import label, regionprops
 from scipy.ndimage import binary_fill_holes
+from skimage.morphology import closing, square
 
 
 def extract_objects(mask, im_filled):
@@ -23,8 +24,12 @@ def extract_objects(mask, im_filled):
     # Fülle Löcher in der Maske
     mask_filled = binary_fill_holes(mask)
     
+    # Schließe kleine Lücken mit closing operation (verhindert Aufteilung von Objekten)
+    # Closing = Dilatation gefolgt von Erosion - verbindet nahe Objekte
+    mask_closed = closing(mask_filled, square(5))  # 5x5 Kernel zum Schließen kleiner Lücken
+    
     # Label die verbundenen Komponenten
-    label_img = label(mask_filled)
+    label_img = label(mask_closed)
     
     # Berechne Region-Properties mit intensity_image, damit image_intensity verfügbar ist
     # Konvertiere im_filled zu Graustufen, falls nötig, für intensity_image

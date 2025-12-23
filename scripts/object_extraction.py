@@ -210,25 +210,30 @@ def morphology_transform(mask,shape = square,erosion_size=5,dilation_size=50):
     """
     Important morphological preprocessing TUNE HERE IF NECESSARY
     """
-    mask = erosion(mask.copy(),shape(erosion_size))        
+    # Nur Erosion anwenden, wenn erosion_size > 0 (sonst Fehler bei erosion_size=0)
+    if erosion_size > 0:
+        mask = erosion(mask.copy(),shape(erosion_size))
+    else:
+        mask = mask.copy()  # Keine Erosion, behält mehr vom Objekt
+        
     mask = dilation(mask,shape(dilation_size))
     return mask
 
-def create_mask(im,fraction_of_rows_to_remove=0.0,fraction_of_cols_to_remove=0.1,hue_threshold=None,saturation_threshold=None,value_threshold=100,erosion_size=5,dilation_size=50,value_to_fill=0):
+def create_mask(im,hue_threshold=None,saturation_threshold=None,value_threshold=100,erosion_size=5,dilation_size=50):
     """
-    Erstelle eine (binÃ¤re) Maske aus dem Bild im durch Randbeschneidung, HSV-Schwellwertbildung und morphologischen Transformationen. 
+    Erstelle eine (binäre) Maske aus dem Bild im durch Randbeschneidung, HSV-Schwellwertbildung und morphologischen Transformationen. 
     Die Maske soll die  relevanten Ausschnitte von im angeben.
 
     """
-    #Schneide die RÃ¤nder des Bildes ab, wo sicher keine Objekte drin sind
-    im_filled= fill_borders(im,value_to_fill=value_to_fill,fraction_of_rows_to_remove=fraction_of_rows_to_remove,fraction_of_cols_to_remove=fraction_of_cols_to_remove)
+    #Schneide die Ränder des Bildes ab, wo sicher keine Objekte drin sind
+    #im_filled= fill_borders(im,value_to_fill=value_to_fill,fraction_of_rows_to_remove=fraction_of_rows_to_remove,fraction_of_cols_to_remove=fraction_of_cols_to_remove)
 
     #Generiere eine Maske (binÃ¤res Bild), welche Vordergrundpixel mit True bezeichnet, den Hintergrund mit False
-    mask = generate_mask_with_hsv_threshold(im_filled,hue_threshold=hue_threshold,saturation_threshold=saturation_threshold,value_threshold=value_threshold)
+    mask = generate_mask_with_hsv_threshold(im=im,sign=None,hue_threshold=hue_threshold,saturation_threshold=saturation_threshold,value_threshold=value_threshold)
 
     #Passe die Maske mit morphologischen Transformationen an, insbesondere, um vereinzelte Pixel zu eliminieren (Erosion) und ev. um die Maske leicht zu vergrÃ¶ssern (Dilatation)
     morphed_mask = morphology_transform(mask,erosion_size=erosion_size,dilation_size=dilation_size)
-    return morphed_mask,im_filled
+    return morphed_mask
     
 def create_masked_image(im,mask):
     """
@@ -469,10 +474,31 @@ def process_file(fn,fraction_of_rows_to_remove=0,fraction_of_cols_to_remove=0,
 
     im = load_file(fn)
     if preprocessing_resolution is not None:
-        if preprocessing_resolution[0]< im.shape[0] and preprocessing_resolution[1]< im.shape[1]:
-            im = (255*resize(im,preprocessing_resolution)).astype('uint8') #resize ergibt ein Bild im mit Wertebereich (0,1)
+        # Unterstützung für beide Methoden:
+        # 1. int: Längere Seite wird auf diesen Wert gesetzt
+        # 2. Tuple: Alte Methode (max_height, max_width)
+        if isinstance(preprocessing_resolution, int):
+            # Neue Methode: Längere Seite auf preprocessing_resolution setzen
+            max_long_side = preprocessing_resolution
+            original_height, original_width = im.shape[:2]
+            longer_side = max(original_height, original_width)
+            scale = max_long_side / longer_side
+            new_height = int(original_height * scale)
+            new_width = int(original_width * scale)
+            target_resolution = (new_height, new_width)
+            logger.info(f'Resize: Längere Seite wird auf {max_long_side}px gesetzt. Neue Größe: {target_resolution}')
         else:
-            logger.warning(f'preprocessing resolution {preprocessing_resolution} ist nicht kleiner als die ursprÃ¼ngliche BildgrÃ¶sse {im.shape}. BildgrÃ¶sse wird nicht verÃ¤ndert')
+            # Alte Methode: Tuple (max_height, max_width)
+            target_resolution = preprocessing_resolution
+            if preprocessing_resolution[0] >= im.shape[0] and preprocessing_resolution[1] >= im.shape[1]:
+                logger.warning(f'preprocessing resolution {preprocessing_resolution} ist nicht kleiner als die ursprÃ¼ngliche BildgrÃ¶sse {im.shape}. BildgrÃ¶sse wird nicht verÃ¤ndert')
+                target_resolution = None
+        
+        if target_resolution is not None:
+            if target_resolution[0] < im.shape[0] and target_resolution[1] < im.shape[1]:
+                im = (255*resize(im, target_resolution)).astype('uint8') #resize ergibt ein Bild im mit Wertebereich (0,1)
+            else:
+                logger.warning(f'Berechnete Zielauflösung {target_resolution} ist nicht kleiner als die ursprÃ¼ngliche BildgrÃ¶sse {im.shape}. BildgrÃ¶sse wird nicht verÃ¤ndert')
 
     regionlist,regions,morphed_mask,masked_image = image_preprocessing(im,
         fraction_of_rows_to_remove=fraction_of_rows_to_remove,
@@ -481,6 +507,33 @@ def process_file(fn,fraction_of_rows_to_remove=0,fraction_of_cols_to_remove=0,
         erosion_size=erosion_size,dilation_size=dilation_size,value_to_fill=value_to_fill)
     #        fig = debug_extraction(im)
     #        fig.savefig('debug.png')
+    
+    # Filtere kleine Objekte: Behalte nur das größte Objekt und verbinde große Objekte
+    # Erstelle label_img aus morphed_mask für die Filterung
+    from skimage.measure import label
+    label_img = label(morphed_mask)
+    
+    # Verwende filter_small_objects, wenn verfügbar
+    try:
+        from scripts.schritt6_kleine_objekte_filtern import filter_small_objects
+        filtered_label_img, filtered_regions = filter_small_objects(
+            label_img,
+            min_num_pixels=min_num_pixels,
+            keep_only_largest=True,  # Nur das größte Objekt behalten
+            connect_large_objects=True,  # Große Objekte verbinden
+            large_object_threshold=0.3  # Objekte >= 30% der größten Region gelten als "groß"
+        )
+        
+        # Extrahiere Regionen aus dem gefilterten Label-Image neu
+        regionlist,regions = extract_regions(filtered_label_img,masked_image,
+            fraction_of_rows_to_remove=fraction_of_rows_to_remove,
+            fraction_of_cols_to_remove=fraction_of_cols_to_remove)
+        
+        logger.info(f"Nach Filterung: {len(regions)} Objekt(e) behalten")
+    except ImportError:
+        # Fallback: Alte Logik, wenn filter_small_objects nicht verfügbar ist
+        logger.warning("filter_small_objects nicht verfügbar, verwende alte Filterlogik")
+    
     fnpart = os.path.splitext(os.path.basename(fn))[0]
     shapes = [region.shape for region in regionlist]
     if len(regionlist)==0:
