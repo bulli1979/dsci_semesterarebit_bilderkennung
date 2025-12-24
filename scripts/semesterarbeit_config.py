@@ -24,14 +24,14 @@ def get_config() -> dict:
             'fc': 0.13,   # FRACTION_OF_COLS_TO_REMOVE
             
             # Schwellwert optimieren (wichtig für saubere Masken!)
-            'vth': 150,  # VALUE_THRESHOLD Farbpalette alles < 150 ist Hintergrund
+            'vth': 140,  # VALUE_THRESHOLD Farbpalette alles < 150 ist Hintergrund
             # Tipp: Testen Sie verschiedene Werte (120-180) und wählen Sie den besten
             # Niedrigere Werte = mehr Pixel werden als Objekt erkannt (kann auch Hintergrund einschließen)
             # Höhere Werte = nur sehr helle Pixel werden erkannt (kann Teile des Objekts ausschließen)
             
             # Morphologische Operationen optimieren
             'es': 0,  # EROSION_SIZE (AUF 0 GESETZT - behält das gesamte Objekt!)
-            'ds': 5,  # DILATION_SIZE (REDUZIERT auf 5 - minimale Transformation, da ursprüngliche Maske besser ist!)
+            'ds': 10,  # DILATION_SIZE (REDUZIERT auf 5 - minimale Transformation, da ursprüngliche Maske besser ist!)
             
             # Minimum Pixel erhöhen für größere, sauberere Objekte
             'mpx': 2000,  # Erhöht von 1000 - filtert kleine Artefakte besser

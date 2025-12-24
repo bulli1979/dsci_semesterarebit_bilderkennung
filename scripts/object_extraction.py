@@ -298,10 +298,19 @@ def image_preprocessing(im,**kwargs):
     masked_image: Originalbild mit unterdrÃ¼cktem Hintergrund
     """
     #Erstelle eine Maske fÃ¼r das Bild.
-    morphed_mask,im_filled = create_mask(im,**kwargs)
+    # Extrahiere nur die Parameter, die create_mask unterstützt
+    mask_kwargs = {
+        'hue_threshold': kwargs.get('hue_threshold'),
+        'saturation_threshold': kwargs.get('saturation_threshold'),
+        'value_threshold': kwargs.get('value_threshold', 100),
+        'erosion_size': kwargs.get('erosion_size', 5),
+        'dilation_size': kwargs.get('dilation_size', 50)
+    }
+    morphed_mask = create_mask(im, **mask_kwargs)
+    im_filled = im  # create_mask gibt nur die Maske zurück, verwende das Originalbild
         
     #Erstelle mit der Maske eine Version von im, in welcher alle Hintergrundpixel auf den Wert 0 gesetzt werden
-    masked_image = create_masked_image(im_filled,morphed_mask)
+    masked_image = create_masked_image(im_filled, morphed_mask)
 
     # Das Bild enthÃ¤lt nun nur noch relevante Pixel (alle anderen wurden ausmaskiert). Segmentiere nun das Bild, um Objekte zu erhalten.
     regionlist,regions = object_segmentation(morphed_mask,masked_image,
@@ -329,18 +338,24 @@ def save_regionlist_to_folder(fn,regionlist,regions,outputpath,write_summary_fil
     min_num_pixels: Kleinste Region (in Anzahl Pixel), welche gespeichert wird
     """
     fnpart = os.path.basename(fn)
+    saved_count = 0
     for ireg,(regA,region) in enumerate(zip(regionlist,regions)):
         #if region.image.shape[0]*region.image.shape[1]<=min_num_pixels: #region.num_pixels<= min_num_pixels, regA.shape[0]*regA.shape[1]?  
         if region.num_pixels<= min_num_pixels: #region.num_pixels<= min_num_pixels, regA.shape[0]*regA.shape[1]?  
             logger.info(f'skipping region: num_pix={region.num_pixels},shape:{regA.shape},area:{region.area}, as num_pix is < {min_num_pixels}')
             continue
         #erstelle einen Dateinamen auf der Basis des Elternnamens, so dass allfÃ¤llige Klassennamen immer noch an der richtigen Stelle (zuletzt, hinter dem letzten "_") stehen.
-        region_filename = insert_region_number(fnpart,ireg)
+        # Wenn nur eine Region vorhanden ist, verwende den Originalnamen ohne Region-Index
+        if len(regionlist) == 1:
+            region_filename = fnpart  # Keine Region-Nummer bei nur einer Region
+        else:
+            region_filename = insert_region_number(fnpart,ireg)
 
         assert os.path.exists(outputpath),f'Der Pfad {outputpath} sollte existieren.'
         outfile = os.path.join(outputpath,region_filename)
         if regA.shape[0]!=0 and regA.shape[1]!=0:
             imsave(outfile,regA.astype('uint8'))
+            saved_count += 1
 
     if (len(regionlist)>1) and write_summary_file:
         outfile = os.path.join(outputpath,fnpart+'_all.jpg')
@@ -357,8 +372,9 @@ def debug_extraction(im):
     """
     Show 4 Plots outlining the extraction process. For debugging purposes.
     """
-    mask,im_filled = create_mask(im)
-    masked_image = create_masked_image(im_filled,mask)
+    mask = create_mask(im)
+    im_filled = im  # create_mask gibt nur die Maske zurück
+    masked_image = create_masked_image(im_filled, mask)
     regionlist,regions = object_segmentation(mask,im_filled)
 
     if len(regions)==0:
@@ -521,7 +537,7 @@ def process_file(fn,fraction_of_rows_to_remove=0,fraction_of_cols_to_remove=0,
             min_num_pixels=min_num_pixels,
             keep_only_largest=True,  # Nur das größte Objekt behalten
             connect_large_objects=True,  # Große Objekte verbinden
-            large_object_threshold=0.3  # Objekte >= 30% der größten Region gelten als "groß"
+            large_object_threshold=0.2  # Objekte >= 30% der größten Region gelten als "groß"
         )
         
         # Extrahiere Regionen aus dem gefilterten Label-Image neu
@@ -537,7 +553,8 @@ def process_file(fn,fraction_of_rows_to_remove=0,fraction_of_cols_to_remove=0,
     fnpart = os.path.splitext(os.path.basename(fn))[0]
     shapes = [region.shape for region in regionlist]
     if len(regionlist)==0:
-        logger.info(f"Keine ausgeschnittenen Regionen gefunden. Ev. mÃ¼ssen die Schwellwerte/Parameter angepasst werden")    
+        logger.warning(f"Keine ausgeschnittenen Regionen gefunden für {fn}. Ev. mÃ¼ssen die Schwellwerte/Parameter angepasst werden. Bild wird übersprungen.")    
+        return True  # Überspringe dieses Bild, aber setze Verarbeitung fort
     logger.info(f"Shapes of extracted regions: {shapes}")
     continue_the_loop = save_regionlist_to_folder(fn,regionlist,regions,outputpath,write_summary_file=write_summary_file,min_num_pixels=min_num_pixels)
     return continue_the_loop
