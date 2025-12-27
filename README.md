@@ -352,7 +352,7 @@ Trainierte Modelle werden in `checkpoints/` oder `model_output/` gespeichert:
 
 Dieses Projekt wurde im Rahmen einer Semesterarbeit erstellt.
 
-## 👤 Autor
+## 👤 Autor - Mirko Eberlein
 
 Semesterarbeit - Werkzeug-Erkennung mit Deep Learning
 
